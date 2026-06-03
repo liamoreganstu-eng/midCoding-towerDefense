@@ -71,6 +71,33 @@ class Enemy:
 	def draw(self):
 		pygame.draw.circle(screen, ENEMY_COLOR, (int(self.x), int(self.y)), 14)
 
+class WaveController:
+	def __init__(self):
+		self.wave_index = 0
+		self.active = False
+		self.spawned = 0
+		self.total = 0
+		self.spawn_timer = 0.0
+
+	def begin_wave(self):
+		if self.active:
+			return False
+		self.active = True
+		self.wave_index += 1
+		self.spawned = 0
+		self.total = 6 + self.wave_index * 2
+		self.spawn_timer = 0.2
+		return True
+
+	def update(self, dt, enemies):
+		if not self.active:
+			return
+		self.spawn_timer -= dt
+		if self.spawn_timer <= 0 and self.spawned < self.total:
+			enemies.append(Enemy(*PATH_POINTS[0]))
+			self.spawned += 1
+			self.spawn_timer = 0.8
+			
 def draw_grid():
 	for row in range(GRID_ROWS):
 		for col in range(GRID_COLS):
@@ -103,7 +130,6 @@ def main():
 
 	pygame.quit()
 	sys.exit()
-	
 
 if __name__ == "__main__":
 	main()
