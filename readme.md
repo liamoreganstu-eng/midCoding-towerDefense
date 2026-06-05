@@ -465,7 +465,7 @@ Block 1: resources and text
 
 ```python
 font = pygame.font.SysFont("menlo", 20)
-
+# Place variables below in main
 gold = 220
 lives = 20
 tower_cost = 70

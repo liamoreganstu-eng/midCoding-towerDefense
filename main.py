@@ -18,7 +18,7 @@ TOWER_COLOR = (150, 120, 250)
 PATH_COLOR = (116, 89, 68)
 ENEMY_COLOR = (223, 104, 90)
 BULLET_COLOR = (252, 210, 78)
-
+font = pygame.font.SysFont("menlo", 20)
 PATH_TILES = [
 	(0, 5), (1, 5), (2, 5), (3, 5), (4, 5),
 	(5, 5), (5, 6), (5, 7), (6, 7), (7, 7),
@@ -73,6 +73,10 @@ class Enemy:
 
 	def draw(self):
 		pygame.draw.circle(screen, ENEMY_COLOR, (int(self.x), int(self.y)), 14)
+		bar_w = 28
+		pct = max(0.0, self.health / self.max_health)
+		pygame.draw.rect(screen, (45, 16, 14), (int(self.x - 14), int(self.y - 22), bar_w, 5))
+		pygame.draw.rect(screen, (77, 201, 112), (int(self.x - 14), int(self.y - 22), int(bar_w * pct), 5))
 @dataclass
 class Bullet:
 	x: float
@@ -98,6 +102,7 @@ class Bullet:
 	def draw(self):
 		pygame.draw.circle(screen, BULLET_COLOR, (int(self.x), int(self.y)), 4)
 
+
 @dataclass
 class Tower:
 	col: int
@@ -117,17 +122,16 @@ class Tower:
 		cy = int(self.y)
 		pygame.draw.rect(screen, TOWER_COLOR, (cx - 14, cy - 14, 28, 28), border_radius=4)
 
-	def tower_range(tower):
-		return 120
-
-	def tower_damage(tower):
-		return 18
-
-	def tower_fire_rate(tower):
-		return 1.0
+def tower_range(tower):
+	return 120
+def tower_damage(tower):
+	return 18
+def tower_fire_rate(tower):
+	return 2.0
 
 class WaveController:
 	def __init__(self):
+		self.auto_mode = False
 		self.wave_index = 0
 		self.active = False
 		self.spawned = 0
@@ -135,6 +139,9 @@ class WaveController:
 		self.spawn_timer = 0.0
 
 	def begin_wave(self):
+		self.total = 6 + self.wave_index * 3
+		self.enemy_health = 30 + self.wave_index * 8
+		self.enemy_speed = 80 + self.wave_index * 4
 		if self.active:
 			return False
 		self.active = True
@@ -145,6 +152,7 @@ class WaveController:
 		return True
 
 	def update(self, dt, enemies):
+		
 		if not self.active:
 			return
 		self.spawn_timer -= dt
@@ -152,6 +160,9 @@ class WaveController:
 			enemies.append(Enemy(*PATH_POINTS[0]))
 			self.spawned += 1
 			self.spawn_timer = 0.8
+			enemies.append(
+	Enemy(*PATH_POINTS[0], speed=self.enemy_speed, health=self.enemy_health, max_health=self.enemy_health)
+)
 
 def update_towers(towers, enemies, bullets, dt):
 	for tower in towers:
@@ -188,6 +199,18 @@ def tower_at(towers, col, row):
 			return t
 	return None
 
+def draw_hud(gold, lives, wave_num, message):
+	lines = [
+		f"Gold: {gold}",
+		f"Lives: {lives}",
+		f"Wave: {wave_num}",
+		message,
+	]
+	y = 20
+	for line in lines:
+		surf = font.render(line, True, (230, 234, 240))
+		screen.blit(surf, (BOARD_WIDTH + 16, y))
+		y += 28
 
 def can_place_tower(towers, col, row):
 	if col < 0 or col >= GRID_COLS or row < 0 or row >= GRID_ROWS:
@@ -205,10 +228,12 @@ def main():
 	towers = []
 	waves = WaveController()
 	bullets = []
-	update_towers(towers, enemies, bullets, dt)
+	gold = 220
+	lives = 20
+	tower_cost = 70
+	message = "Press S to start wave."
 
 	while running:
-		clock.tick(FPS)
 		dt = clock.tick(FPS) / 1000.0
 		waves.update(dt, enemies)
 		for enemy in enemies:
@@ -219,13 +244,22 @@ def main():
 			elif event.type == pygame.KEYDOWN:
 				if event.key == pygame.K_s:
 					waves.begin_wave()
+			elif event.type == pygame.KEYDOWN:
+				if event.key == pygame.K_a:
+					waves.auto_mode = not waves.auto_mode
 			elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
 				mx, my = event.pos
 				if mx < BOARD_WIDTH:
 					col = mx // TILE_SIZE
 					row = my // TILE_SIZE
-					if can_place_tower(towers, col, row):
+					if can_place_tower(towers, col, row) and gold >= tower_cost:
 						towers.append(Tower(col, row))
+						gold -= tower_cost
+					elif gold < tower_cost:
+						message = "Not enough gold."
+		if waves.auto_mode and not waves.active and len(enemies) == 0:
+			waves.begin_wave()
+
 		screen.fill(BG_COLOR)
 		draw_grid()
 		for b in list(bullets):
@@ -236,13 +270,21 @@ def main():
 			b.draw()
 
 		for enemy in list(enemies):
-			if enemy.health <= 0:
+			enemy.update(dt)
+			if enemy.path_index >= len(PATH_POINTS) - 1:
 				enemies.remove(enemy)
+				lives -= 1
+				message = "Enemy leaked through!"
+			elif enemy.health <= 0:
+				enemies.remove(enemy)
+				gold += 12
 		for enemy in enemies:
 			enemy.draw()
 		for tower in towers:
 			tower.draw()
+		update_towers(towers, enemies, bullets, dt)
 		draw_panel()
+		draw_hud(gold, lives, waves.wave_index, message)
 		pygame.display.flip()
 
 	pygame.quit()
